@@ -1,0 +1,16 @@
+[package]
+name = "xgolib-rs"
+version = "0.1.0"
+authors = ["JoZo Lab <github@jozolab.com>"]
+edition = "2021"
+description = "It is a rust port of XGO-PythonLib"
+readme = "README.md"
+repository = "https://github.com/jozolab/xgolib-rs"
+license = "MIT"
+keywords = ["xgolib", "rider-pi", "robotics"]
+categories = ["embedded", "hardware-support", "science::robotics"]
+include = ["src/**/*", "Cargo.toml", "LICENSE", "README.md"]
+publish = ["crates-io"]
+
+[dependencies]
+serialport = "4.6.1"
