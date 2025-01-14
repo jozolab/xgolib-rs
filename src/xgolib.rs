@@ -428,16 +428,16 @@ impl XGO {
         };
 
         let version = xgo.read_firmware();
-        if version.eq("M") {
+        if version.starts_with("M") {
             xgo.device = get_device("xgomini");
-        } else if version.eq("L") {
+        } else if version.starts_with("L") {
             xgo.device = get_device("xgolite");
-        } else if version.eq("R") {
+        } else if version.starts_with("R") {
             xgo.device = get_device("xgorider");
         } else {
             xgo.device = get_device("NA");
         }
-        xgo.version = Some(version);
+        xgo.version = Some(String::from(version));
 
         xgo.reset();
         xgo.init_yaw = xgo.read_yaw();
@@ -483,6 +483,7 @@ impl XGO {
     }
 
     fn __read(&mut self, addr: u8, read_len: Option<u8>) {
+        self.__flush_input();
         let read_len = read_len.unwrap_or(1);
 
         let mode = 0x02;
@@ -628,10 +629,12 @@ impl XGO {
     }
 
     pub fn turn_to(&mut self, theta: f64, vyaw: Option<i32>, emax: Option<i32>) {
+        let emax = emax.unwrap_or(10);
+
         let mut cur_yaw = self.read_yaw();
         let des_yaw = self.init_yaw + theta;
 
-        while (des_yaw - cur_yaw).abs() >= emax.unwrap_or(10) as f64 {
+        while (des_yaw - cur_yaw).abs() >= emax as f64 {
             self.turn(
                 copysign(vyaw.unwrap() as f64, des_yaw - cur_yaw) as i32,
                 None,
@@ -684,10 +687,12 @@ impl XGO {
                 return;
             }
             Some(index) => {
+                let param_index = index + 1;
+
                 match index {
                     0 => self.set_param(
                         "TRANSLATION",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             vec![self.device.translation_limit.x_limit],
@@ -696,7 +701,7 @@ impl XGO {
                     ),
                     1 => self.set_param(
                         "TRANSLATION",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             vec![self.device.translation_limit.y_limit],
@@ -705,7 +710,7 @@ impl XGO {
                     ),
                     2 => self.set_param(
                         "TRANSLATION",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             vec![
@@ -718,7 +723,7 @@ impl XGO {
                     _ => return,
                 }
 
-                self.__send("TRANSLATION", Some(index as u8), None);
+                self.__send("TRANSLATION", Some(param_index as u8), None);
             }
         }
     }
@@ -753,10 +758,11 @@ impl XGO {
                 return;
             }
             Some(index) => {
+                let param_index = index + 1;
                 match index {
                     0 => self.set_param(
                         "ATTITUDE",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             vec![self.device.attitude_limit.roll_limit],
@@ -765,7 +771,7 @@ impl XGO {
                     ),
                     1 => self.set_param(
                         "ATTITUDE",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             vec![self.device.attitude_limit.pitch_limit],
@@ -774,7 +780,7 @@ impl XGO {
                     ),
                     2 => self.set_param(
                         "ATTITUDE",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             vec![self.device.attitude_limit.yaw_limit],
@@ -784,7 +790,7 @@ impl XGO {
                     _ => return,
                 }
 
-                self.__send("ATTITUDE", Some(index as u8), None);
+                self.__send("ATTITUDE", Some(param_index as u8), None);
             }
         }
     }
@@ -904,7 +910,8 @@ impl XGO {
                 println!("Error! Illegal motor_id!");
             }
             Some(index) => {
-                self.__motor(index, data);
+                let param_index = index + 1;
+                self.__motor(param_index, data);
             }
         }
     }
@@ -978,12 +985,14 @@ impl XGO {
                 return;
             }
             Some(index) => {
+                let param_index = index + 1;
+
                 if period == 0f32 {
-                    self.set_param("PERIODIC_ROT", index, 0);
+                    self.set_param("PERIODIC_ROT", param_index, 0);
                 } else {
                     self.set_param(
                         "PERIODIC_ROT",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             Vec::from(self.device.period_limit.limit[0]),
@@ -991,7 +1000,7 @@ impl XGO {
                         ),
                     );
                 }
-                self.__send("PERIODIC_ROT", Some(index as u8), None);
+                self.__send("PERIODIC_ROT", Some(param_index as u8), None);
             }
         }
     }
@@ -1025,12 +1034,14 @@ impl XGO {
                 return;
             }
             Some(index) => {
+                let param_index = index + 1;
+
                 if period == 0f32 {
-                    self.set_param("PERIODIC_TRAN", index, 0);
+                    self.set_param("PERIODIC_TRAN", param_index, 0);
                 } else {
                     self.set_param(
                         "PERIODIC_TRAN",
-                        index,
+                        param_index,
                         conver2u8(
                             period as f64,
                             Vec::from(self.device.period_limit.limit[0]),
@@ -1038,7 +1049,7 @@ impl XGO {
                         ),
                     );
                 }
-                self.__send("PERIODIC_TRAN", Some(index as u8), None);
+                self.__send("PERIODIC_TRAN", Some(param_index as u8), None);
             }
         }
     }
@@ -1257,104 +1268,97 @@ impl XGO {
                 return false;
             }
 
-            let mut data = vec![0; 1];
+            let n = self.port.bytes_to_read().unwrap();
+            let mut rx_check: u16 = 0;
 
-            match self.port.read_exact(&mut data) {
-                Ok(()) => {
-                    // Can read 1 byte data
-                }
-                Err(_) => {
-                    // No data left
-                    return false;
-                }
-            }
+            if n > 0 {
+                let mut data = vec![0; n as usize];
+                self.port.read_exact(&mut data).unwrap();
 
-            for num in data {
-                rx_msg.push(num);
-                match self.rx_flag {
-                    0 => {
-                        if num == 0x55 {
-                            self.rx_flag = 1;
-                        } else {
-                            self.rx_flag = 0;
-                        }
-                    }
-                    1 => {
-                        if num == 0x00 {
-                            self.rx_flag = 2;
-                        } else {
-                            self.rx_flag = 0;
-                        }
-                    }
-                    2 => {
-                        self.rx_len = num as usize;
-                        self.rx_flag = 3;
-                    }
-                    3 => {
-                        self.rx_type = num;
-                        self.rx_flag = 4;
-                    }
-                    4 => {
-                        self.rx_addr = num;
-                        self.rx_flag = 5;
-                        self.rx_count = 0;
-                    }
-                    5 => {
-                        if self.rx_count == ((self.rx_len - 9) as u8).into() {
-                            self.rx_data[self.rx_count] = num;
-                            self.rx_flag = 6;
-                        } else if self.rx_count < ((self.rx_len - 9) as u8).into() {
-                            self.rx_data[self.rx_count] = num;
-                            self.rx_count += 1;
-                        }
-                    }
-                    6 => {
-                        let mut rx_check: u8 = 0;
-                        for &i in &self.rx_data[0..(self.rx_len - 8)] {
-                            rx_check = rx_check.wrapping_add(i);
-                        }
-                        let sum_data = (self.rx_len as u16
-                            + self.rx_type as u16
-                            + self.rx_addr as u16
-                            + rx_check as u16)
-                            % 256;
-                        rx_check = (255 - sum_data) as u8;
-                        if num == rx_check {
-                            self.rx_flag = 7;
-                        } else {
-                            self.rx_flag = 0;
-                            self.rx_count = 0;
-                            self.rx_addr = 0;
-                            self.rx_len = 0;
-                        }
-                    }
-                    7 => {
-                        if num == 0x00 {
-                            self.rx_flag = 8;
-                        } else {
-                            self.rx_flag = 0;
-                            self.rx_count = 0;
-                            self.rx_addr = 0;
-                            self.rx_len = 0;
-                        }
-                    }
-                    8 => {
-                        if num == 0xAA {
-                            self.rx_flag = 0;
-                            if self.verbose {
-                                println!("rx_data: {:?}", self.rx_data);
+                for num in data {
+                    rx_msg.push(num);
+                    match self.rx_flag {
+                        0 => {
+                            if num == 0x55 {
+                                self.rx_flag = 1;
+                            } else {
+                                self.rx_flag = 0;
                             }
-                            return true;
-                        } else {
-                            self.rx_flag = 0;
-                            self.rx_count = 0;
-                            self.rx_addr = 0;
-                            self.rx_len = 0;
                         }
-                    }
-                    _ => {
-                        // Handle unexpected rx_flag values
-                        self.rx_flag = 0;
+                        1 => {
+                            if num == 0x00 {
+                                self.rx_flag = 2;
+                            } else {
+                                self.rx_flag = 0;
+                            }
+                        }
+                        2 => {
+                            self.rx_len = num as usize;
+                            self.rx_flag = 3;
+                        }
+                        3 => {
+                            self.rx_type = num;
+                            self.rx_flag = 4;
+                        }
+                        4 => {
+                            self.rx_addr = num;
+                            self.rx_flag = 5;
+                            self.rx_count = 0;
+                        }
+                        5 => {
+                            if self.rx_count == (self.rx_len - 9) as u8 as usize {
+                                self.rx_data[self.rx_count] = num;
+                                self.rx_flag = 6;
+                            } else if self.rx_count < (self.rx_len - 9) as u8 as usize {
+                                self.rx_data[self.rx_count] = num;
+                                self.rx_count += 1;
+                            }
+                        }
+                        6 => {
+                            for &i in &self.rx_data[0..(self.rx_len - 8)] {
+                                rx_check = rx_check + (i as u16);
+                            }
+
+                            rx_check = 255 - (self.rx_len as u16
+                                + self.rx_type as u16
+                                + self.rx_addr as u16
+                                + rx_check)
+                                % 256;
+
+                            if num as u16 == rx_check {
+                                self.rx_flag = 7;
+                            } else {
+                                self.rx_flag = 0;
+                                self.rx_count = 0;
+                                self.rx_addr = 0;
+                                self.rx_len = 0;
+                            }
+                        }
+                        7 => {
+                            if num == 0x00 {
+                                self.rx_flag = 8;
+                            } else {
+                                self.rx_flag = 0;
+                                self.rx_count = 0;
+                                self.rx_addr = 0;
+                                self.rx_len = 0;
+                            }
+                        }
+                        8 => {
+                            if num == 0xAA {
+                                self.rx_flag = 0;
+                                if self.verbose {
+                                    println!("rx_data: {:?}", rx_msg);
+                                }
+                                return true;
+                            } else {
+                                self.rx_flag = 0;
+                                self.rx_count = 0;
+                                self.rx_addr = 0;
+                                self.rx_len = 0;
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -1383,7 +1387,7 @@ impl XGO {
 
         if runtime > 0.0 {
             thread::sleep(Duration::from_secs_f64(runtime));
-            self.set_param("VX", 1, 0);
+            self.set_param("VX", 1, conver2u8(0f64, vec![self.device.vx_limit.limit], None));
             self.__send("VX", None, None);
         }
     }
@@ -1398,7 +1402,7 @@ impl XGO {
 
         if runtime > 0.0 {
             thread::sleep(Duration::from_secs_f64(runtime));
-            self.set_param("VYAW", 1, 0);
+            self.set_param("VYAW", 1, conver2u8(0f64, vec![self.device.vyaw_limit.limit], None));
             self.__send("VYAW", None, None);
         }
     }

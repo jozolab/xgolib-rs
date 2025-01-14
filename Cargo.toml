@@ -1,6 +1,6 @@
 [package]
 name = "xgolib-rs"
-version = "0.1.0"
+version = "0.1.3"
 authors = ["JoZo Lab <github@jozolab.com>"]
 edition = "2021"
 description = "It is a rust port of XGO-PythonLib"
