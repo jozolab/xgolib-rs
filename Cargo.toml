@@ -1,8 +1,9 @@
 [package]
-name = "xgolib-rs"
-version = "0.1.3"
-authors = ["JoZo Lab <github@jozolab.com>"]
+name = "xgolib"
+version = "0.1.4"
+authors = ["JoZoLab <github@jozolab.com>"]
 edition = "2021"
+rust-version = "1.59.0"
 description = "It is a rust port of XGO-PythonLib"
 readme = "README.md"
 repository = "https://github.com/jozolab/xgolib-rs"

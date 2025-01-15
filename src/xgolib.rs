@@ -396,8 +396,8 @@ pub struct XGO {
 }
 
 impl XGO {
-    pub fn new(port_name: String, baud: u32, verbose: bool) -> Self {
-        let mut port = serialport::new(&port_name, baud)
+    pub fn new(port_name: &str, baud: u32, verbose: bool) -> Self {
+        let mut port = serialport::new(String::from(port_name), baud)
             .timeout(Duration::from_millis(500))
             .data_bits(DataBits::Eight)
             .parity(Parity::None)
@@ -413,7 +413,7 @@ impl XGO {
         let mut xgo = XGO {
             verbose,
             port,
-            port_name,
+            port_name: port_name.to_string(),
             device,
             common_params: get_common_params(),
             rx_flag: 0,
@@ -466,12 +466,12 @@ impl XGO {
         let mode = 0x01;
         let order = self.common_params[key][0] + index - 1;
         let mut value = vec![];
-        let mut value_sum = 0;
-        for i in index..index + len {
-            value.push(self.common_params[key][i as usize]);
-            value_sum += self.common_params[key][i as usize];
+        let mut value_sum = 0u16;
+        for i in 0..len {
+            value.push(self.common_params[key][(index + i) as usize]);
+            value_sum = value_sum + self.common_params[key][(index + i) as usize] as u16;
         }
-        let sum_data = (len as u16 + 0x08u16 + mode as u16 + order as u16 + value_sum as u16) % 256;
+        let sum_data = (len as u16 + 0x08u16 + mode as u16 + order as u16 + value_sum) % 256;
         let sum_data = (255 - sum_data) as u8;
         let mut tx = vec![0x55, 0x00, len + 0x08, mode, order];
         tx.extend(value);
@@ -1540,11 +1540,11 @@ impl XGO {
         self.upgrade(filename);
     }
 
-    pub fn rider_led(&mut self, index: u8, color: u8) {
+    pub fn rider_led(&mut self, index: u8, color: [u8; 3]) {
         self.set_param("LED_COLOR", 0, 0x68 + index);
-        self.set_param("LED_COLOR", 1, color);
-        self.set_param("LED_COLOR", 2, color);
-        self.set_param("LED_COLOR", 3, color);
+        self.set_param("LED_COLOR", 1, color[0]);
+        self.set_param("LED_COLOR", 2, color[1]);
+        self.set_param("LED_COLOR", 3, color[2]);
         self.__send("LED_COLOR", None, Some(3));
     }
 }
