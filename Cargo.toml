@@ -1,6 +1,6 @@
 [package]
 name = "xgolib"
-version = "0.1.4"
+version = "0.1.8"
 authors = ["JoZoLab <github@jozolab.com>"]
 edition = "2021"
 rust-version = "1.59.0"

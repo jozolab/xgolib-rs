@@ -439,7 +439,6 @@ impl XGO {
         }
         xgo.version = Some(String::from(version));
 
-        xgo.reset();
         xgo.init_yaw = xgo.read_yaw();
         thread::sleep(Duration::from_secs(1));
         xgo
